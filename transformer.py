@@ -1,10 +1,8 @@
 import math
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-import torch.functional as F
-
+import torch.nn.functional as F
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, config):
@@ -116,14 +114,6 @@ class Block(nn.Module):
         x = x + self.ffwd(self.ln2(x))
         return x
 
-@dataclass
-class Config:
-    block_size: int = 1024
-    vocab_size: int = 65
-    n_layer: int = 6
-    n_head: int = 6
-    n_embed: int = 368
-    dropout: int = 0.1
 
 class Transformer(nn.Module):
     def __init__(self, config):
@@ -131,7 +121,7 @@ class Transformer(nn.Module):
 
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embed)
         self.position_embedding_table = nn.Embedding(config.block_size, config.n_embed)
-        self.blocks = nn.Sequential(*[Block(config.n_embed, n_head=config.n_head) for _ in range(config.n_layer)])
+        self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embed) # final layer norm
         self.lm_head = nn.Linear(config.n_embed, config.vocab_size)
 
