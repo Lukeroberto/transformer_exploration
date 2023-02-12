@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import torch
 import tqdm
+import matplotlib.pyplot as plt
 
 from transformer import Transformer
 
@@ -11,9 +12,10 @@ class Config:
     batch_size: int = 64
     num_iterations: int = 5000
     lr: float = 3e-4
+    eval_interval: int = 100
 
     # Model config
-    block_size: int = 32
+    block_size: int = 12
     vocab_size: int = 65 # Shakespeare dataset
     n_layer: int = 6
     n_head: int = 6
@@ -47,19 +49,45 @@ def get_batch(dataset, config):
     y = torch.stack([dataset[i+1:i+config.block_size+1] for i in ix])
     return x, y
 
-def train(model, train, val, config, model_loc="./model"):
+@torch.no_grad()
+def estimate_loss(model, train, val, config, eval_iters=50):
+    out = {}
+    model.eval()
+    for split in ["train", "val"]:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            xb, yb = get_batch(train, config) if split == "train" else get_batch(val, config)
+            logits, loss = model(xb, yb)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
+def train(model, train, val, config, model_loc="./model/transformer.pt"):
+    results = {
+        "train": [],
+        "val": []
+    }
     
     opt = torch.optim.AdamW(model.parameters(), lr=config.lr)
-    for step in tqdm.trange(config.num_iterations):
+    pbar = tqdm.trange(config.num_iterations)
+    for step in pbar:
         xb, yb = get_batch(train, config)
-
         logits, loss = model(xb, yb)
+
+        if step % config.eval_interval == 0:
+            l = estimate_loss(model, train, val, config)
+            t_train, t_val = l["train"], l["val"]
+            results["train"].append(t_train)
+            results["val"].append(t_val)
+            pbar.set_description(f"Estimated losses: {t_train:0.5f} train, {t_val:0.5f} val")
+
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
     
     torch.save(model, model_loc)
-    return model
+    return model, results
 
 def sample_from_model(model, length, decoder):
     context = torch.zeros((1,1), dtype=torch.long)
@@ -77,12 +105,11 @@ if __name__ == '__main__':
 
     
     config = Config()
-    print("Training config: ", config)
-    print("Dataset location: ", args.data_loc)
-
-
     vocab_size, encoder, decoder = tokenize(text)
     config.vocab_size = vocab_size
+
+    print("Training config: ", config)
+    print("Dataset location: ", args.data_loc)
 
     train_d, val_d = create_dataset(text, encoder)
     print("Training set size: ", len(train_d))
@@ -90,10 +117,15 @@ if __name__ == '__main__':
     
     model = Transformer(config)
 
-    generated = sample_from_model(model, 100, decoder)
+    generated = sample_from_model(model, 50, decoder)
     print("\nFresh model sample:\n", generated)
 
     print("\nTraining model...")
-    model = train(model, train_d, val_d, config)
+    model, results = train(model, train_d, val_d, config)
 
-    print("\nTrained sample:\n ", sample_from_model(model, 500, decoder))
+    print("\nTrained sample:\n ", sample_from_model(model, 100, decoder))
+
+    plt.plot(results["train"])
+    plt.plot(results["val"])
+    plt.legend(["Train", "Validation"])
+    plt.savefig("./model/results.png")
