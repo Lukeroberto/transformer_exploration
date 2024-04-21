@@ -13,7 +13,8 @@ gen_calculator_dataset.py: generates a simple .txt file dataset containing arith
 transformer.py: gpt-2 like architecture, refactored out of jupyter notbook tutorial into standalone file.
 
 train.py: trainer for a given dataset, output looks like:
-'''
+
+```console
 Training config:  Config(batch_size=64, num_iterations=5000, lr=0.0003, eval_interval=100, block_size=12, vocab_size=17, n_layer=6, n_head=6, n_embed=384, dropout=0.1)
 Dataset location:  math.txt
 Training set size:  1209022
@@ -36,4 +37,4 @@ Trained sample:
 39 // 82 = 0
 12 - 26 = -2
 48 // 59 = 1
-'''
+```
